@@ -51,18 +51,25 @@ export async function createServerInstance(params) {
       // Container didn't exist
     }
 
-    // Double app_update 90 pass to force SteamCMD to unpack hlds_run for App ID 90
-    const steamCmdArgs = `/home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 +app_update 90 validate +quit`;
-    const hldsRunArgs = `chmod +x /home/steam/hlds/hlds_run && /home/steam/hlds/hlds_run -game ${game} +ip 0.0.0.0 +port ${port} +maxplayers 32 +map de_dust2 +rcon_password ${rconPassword}`;
+    // Shell script executed inside the container
+    const initScript = `
+      mkdir -p /home/steam/hlds && 
+      /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_update 90 validate +quit && 
+      /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +quit && 
+      if [ -f /home/steam/hlds/hlds_run ]; then 
+        chmod +x /home/steam/hlds/hlds_run && 
+        /home/steam/hlds/hlds_run -game ${game} +ip 0.0.0.0 +port ${port} +maxplayers 32 +map de_dust2 +rcon_password ${rconPassword}; 
+      else 
+        echo "HLDS installation failed: hlds_run binary not found in /home/steam/hlds"; 
+        sleep 60; 
+      fi
+    `.replace(/\s+/g, ' ').trim();
 
     const container = await docker.createContainer({
       Image: imageName,
       name: containerName,
       Tty: true,
-      Cmd: [
-        'bash', '-c',
-        `${steamCmdArgs} && ${hldsRunArgs}`
-      ],
+      Cmd: ['bash', '-c', initScript],
       ExposedPorts: {
         [`${port}/udp`]: {},
         [`${port}/tcp`]: {}
