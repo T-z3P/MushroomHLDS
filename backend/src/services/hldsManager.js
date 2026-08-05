@@ -51,18 +51,24 @@ export async function createServerInstance(params) {
       // Container didn't exist
     }
 
-    // Robust shell execution script
+    // 1. Fix folder ownership so 'steam' user can write to mounted path
+    // 2. Install 32-bit glibc dependencies for HLDS engine
+    // 3. Install HLDS base engine (App 70) -> Game Mod (App 90) via SteamCMD
     const initScript = `
       mkdir -p /home/steam/hlds && 
-      cd /home/steam/hlds && 
-      /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 validate +quit && 
+      chown -R steam:steam /home/steam/hlds && 
+      dpkg --add-architecture i386 && 
+      apt-get update && 
+      apt-get install -y lib32gcc-s1 lib32stdc++6 lib32z1 && 
+      su - steam -c "/home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_update 70 validate +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +app_update 90 -beta steam_legacy validate +quit" && 
       if [ ! -f /home/steam/hlds/hlds_run ] && [ -f /home/steam/hlds/hlds_linux ]; then 
         echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux "$@"' > /home/steam/hlds/hlds_run && 
         chmod +x /home/steam/hlds/hlds_run; 
       fi && 
       if [ -f /home/steam/hlds/hlds_run ] || [ -f /home/steam/hlds/hlds_linux ]; then 
-        chmod +x /home/steam/hlds/hlds_* && 
-        ./hlds_run -game ${game} +ip 0.0.0.0 +port ${port} +maxplayers 32 +map de_dust2 +rcon_password ${rconPassword}; 
+        chmod -R 755 /home/steam/hlds && 
+        chown -R steam:steam /home/steam/hlds && 
+        su - steam -c "cd /home/steam/hlds && ./hlds_run -game ${game} +ip 0.0.0.0 +port ${port} +maxplayers 32 +map de_dust2 +rcon_password ${rconPassword}"; 
       else 
         echo "HLDS installation failed: neither hlds_run nor hlds_linux binary was found in /home/steam/hlds"; 
         sleep 60; 
@@ -72,6 +78,7 @@ export async function createServerInstance(params) {
     const container = await docker.createContainer({
       Image: imageName,
       name: containerName,
+      User: 'root', // Run container setup as root to fix volume permissions and install 32-bit libs
       Tty: true,
       Cmd: ['bash', '-c', initScript],
       ExposedPorts: {
