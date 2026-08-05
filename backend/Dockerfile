@@ -13,8 +13,10 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Install system utilities (curl/ca-certificates needed for prebuilt binary downloads)
+# Install complete build toolchain + SSL certs for downloading native binaries
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3 \
     sqlite3 \
     ca-certificates \
     curl \
@@ -23,8 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy backend package manifests
 COPY backend/package*.json ./
 
-# Install production dependencies (lets better-sqlite3 download prebuilt binaries)
-RUN npm install --omit=dev --legacy-peer-deps
+# Run npm install with verbose logging and no-audit to prevent silent crashes
+RUN npm install --omit=dev --legacy-peer-deps --loglevel=verbose --no-audit
 
 # Copy backend application source code
 COPY backend/ ./
