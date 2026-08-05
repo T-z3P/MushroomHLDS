@@ -1,26 +1,20 @@
-import Rcon from 'node-rcon';
+import Rcon from 'rcon';
 
-export function executeRcon(ip, port, rconPassword, command) {
+export function executeRcon(ip, port, password, command) {
   return new Promise((resolve, reject) => {
-    const conn = new Rcon(ip, port, rconPassword, { tcp: false, challenge: true });
-
-    const timeout = setTimeout(() => {
-      conn.disconnect();
-      reject(new Error('RCON Request Timed Out'));
-    }, 4000);
+    const conn = new Rcon(ip, port, password, { tcp: false });
 
     conn.on('auth', () => {
       conn.send(command);
     });
 
     conn.on('response', (str) => {
-      clearTimeout(timeout);
       conn.disconnect();
       resolve(str);
     });
 
     conn.on('error', (err) => {
-      clearTimeout(timeout);
+      conn.disconnect();
       reject(err);
     });
 
