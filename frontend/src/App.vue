@@ -51,15 +51,19 @@
           <button @click="showCreateModal = false" class="text-slate-400 hover:text-white text-xl">✕</button>
         </div>
 
+        <div v-if="errorMessage" class="bg-red-500/10 border border-red-500/30 text-red-400 text-sm p-3 rounded-xl">
+          {{ errorMessage }}
+        </div>
+
         <form @submit.prevent="createInstance" class="space-y-4">
           <div>
             <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server ID</label>
-            <input v-model="form.id" type="text" placeholder="cs16-pub" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            <input v-model="form.id" type="text" placeholder="cs-ichim" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server Name</label>
-            <input v-model="form.name" type="text" placeholder="Mushroom CS 1.6 Public" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            <input v-model="form.name" type="text" placeholder="CS.iCHiM.NET" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
           </div>
 
           <div class="grid grid-cols-2 gap-4">
@@ -85,8 +89,11 @@
           </div>
 
           <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-800">
-            <button type="button" @click="showCreateModal = false" class="px-4 py-2 text-slate-400 hover:text-white font-medium text-sm">Cancel</button>
-            <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-indigo-600/30">Create Instance</button>
+            <button type="button" @click="showCreateModal = false" :disabled="isSubmitting" class="px-4 py-2 text-slate-400 hover:text-white font-medium text-sm">Cancel</button>
+            <button type="submit" :disabled="isSubmitting" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-indigo-600/30 disabled:opacity-50 inline-flex items-center gap-2">
+              <span v-if="isSubmitting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+              <span>{{ isSubmitting ? 'Creating Container...' : 'Create Instance' }}</span>
+            </button>
           </div>
         </form>
       </div>
@@ -104,6 +111,8 @@ const stats = ref({ cpuLoad: '0', memUsed: '0', memTotal: '0', uptime: '00:00' }
 const servers = ref([]);
 const logs = ref([]);
 const showCreateModal = ref(false);
+const isSubmitting = ref(false);
+const errorMessage = ref('');
 
 const form = ref({
   id: '',
@@ -135,6 +144,9 @@ async function fetchData() {
 }
 
 async function createInstance() {
+  isSubmitting.value = true;
+  errorMessage.value = '';
+
   try {
     const res = await fetch('/api/servers/create', {
       method: 'POST',
@@ -142,13 +154,19 @@ async function createInstance() {
       body: JSON.stringify(form.value)
     });
 
+    const data = await res.json();
+
     if (res.ok) {
       showCreateModal.value = false;
       form.value = { id: '', name: '', port: 27015, rconPassword: '', game: 'cstrike', installMetamod: true, installAmxmodx: true, freshInstall: true };
       await fetchData();
+    } else {
+      errorMessage.value = data.error || data.message || 'Failed to create instance.';
     }
   } catch (err) {
-    console.error('Error creating server instance', err);
+    errorMessage.value = 'Network error connecting to backend.';
+  } finally {
+    isSubmitting.value = false;
   }
 }
 
