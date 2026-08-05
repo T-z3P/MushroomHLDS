@@ -4,7 +4,8 @@
   "type": "module",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "rebuild": "npm rebuild --build-from-source"
   },
   "dependencies": {
     "@fastify/static": "^7.0.0",
