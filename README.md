@@ -69,7 +69,7 @@ MushroomHLDS is a full-stack, containerized game panel built specifically for **
 
 1. Clone Repository & Navigate to Directory:
    ```
-   git clone git@github.com:YOUR_USERNAME/MushroomHLDS.git
+   git clone git@github.com:T-z3P/MushroomHLDS.git
    cd MushroomHLDS
    ```
 
