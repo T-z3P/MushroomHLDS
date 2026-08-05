@@ -28,7 +28,7 @@ MushroomHLDS is a full-stack, containerized game panel built specifically for **
 
 ## 📁 Directory Structure
 
-MushroomHLDS/
+```MushroomHLDS/
 ├── docker-compose.yml
 ├── README.md
 ├── backend/
@@ -55,7 +55,7 @@ MushroomHLDS/
             ├── HostStatCard.vue
             ├── RconConsole.vue
             └── ServerMushroomCard.vue
-
+```
 ---
 
 ## 📦 Deployment & Setup Guide
@@ -68,18 +68,24 @@ MushroomHLDS/
 ### Production Docker Deployment Steps
 
 1. Clone Repository & Navigate to Directory:
+   ```
    git clone git@github.com:YOUR_USERNAME/MushroomHLDS.git
    cd MushroomHLDS
+   ```
 
 2. Set Up Storage Directories:
+   ```
    sudo mkdir -p /srv/hlds/servers ./data
    sudo chown -R $USER:$USER /srv/hlds/servers ./data
+   ```
 
 3. Build & Launch Application:
+   ```
    docker compose up -d --build
+   ```
 
-4. Access UI:
-   Navigate to http://<SERVER_IP>:3000 in your web browser.
+5. Access UI:
+   Navigate to `http://<SERVER_IP>:3000` in your web browser.
 
 ---
 
@@ -88,14 +94,18 @@ MushroomHLDS/
 To run backend and frontend separately for local development:
 
 1. Backend Server:
+   ```
    cd backend
    npm install
    npm start
+   ```
 
 2. Frontend Dev Server:
+   ```
    cd frontend
    npm install
    npm run dev
+   ```
    
    Access the portal at http://localhost:5173 (API requests proxy automatically to port 3000).
 
