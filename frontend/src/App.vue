@@ -1,80 +1,163 @@
 <template>
-  <div class="min-h-screen bg-slate-950 text-slate-100 p-6 font-sans">
-    <div class="max-w-7xl mx-auto space-y-6">
+  <div class="max-w-7xl mx-auto px-6 py-10 space-y-10">
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-black text-white tracking-tight">MushroomHLDS</h1>
+        <p class="text-slate-400 text-sm mt-1">GoldSrc Server Suite & Host Controller</p>
+      </div>
+
+      <button 
+        @click="showCreateModal = true"
+        class="inline-flex items-center justify-center px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition-all duration-200 cursor-pointer active:scale-95"
+      >
+        + Add HLDS Instance
+      </button>
+    </header>
+
+    <!-- Host System Stats -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <HostStatCard title="Host Load" :value="`${stats.cpuLoad} %`" type="CPU" />
+      <HostStatCard title="Memory Usage" :value="`${stats.memUsed} / ${stats.memTotal} GB`" type="RAM" />
+      <HostStatCard title="Host Uptime" :value="stats.uptime" type="UP" />
+    </section>
+
+    <!-- Active Game Servers -->
+    <section class="space-y-4">
+      <h2 class="text-lg font-bold text-white">Active Game Servers</h2>
       
-      <!-- Header -->
-      <header class="flex justify-between items-center pb-4 border-b border-slate-800">
-        <div>
-          <h1 class="text-2xl font-bold tracking-tight text-white">MushroomHLDS</h1>
-          <p class="text-sm text-slate-400">GoldSrc Server Suite & Host Controller</p>
+      <div v-if="servers.length === 0" class="bg-[#121829] border border-slate-800 rounded-2xl p-10 text-center text-slate-500">
+        No active game servers running. Click <strong>+ Add HLDS Instance</strong> to launch one.
+      </div>
+
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <ServerMushroomCard 
+          v-for="server in servers" 
+          :key="server.id" 
+          :server="server" 
+          @refresh="fetchData" 
+        />
+      </div>
+    </section>
+
+    <!-- Platform Action Logs -->
+    <ActionLogs :logs="logs" />
+
+    <!-- Create Instance Modal -->
+    <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div class="bg-[#121829] border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-6">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+          <h3 class="text-xl font-bold text-white">Add New HLDS Instance</h3>
+          <button @click="showCreateModal = false" class="text-slate-400 hover:text-white text-xl">✕</button>
         </div>
-        <button @click="showModal = true" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-4 py-2 rounded-2xl transition shadow-lg shadow-indigo-600/20">
-          + Add HLDS Instance
-        </button>
-      </header>
 
-      <!-- Host Machine Stats -->
-      <HostStatCard :stats="hostStats" />
+        <form @submit.prevent="createInstance" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server ID</label>
+            <input v-model="form.id" type="text" placeholder="cs16-pub" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+          </div>
 
-      <!-- Active Servers -->
-      <section>
-        <h2 class="text-lg font-semibold mb-3 text-slate-300">Active Game Servers</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <ServerMushroomCard 
-            v-for="server in servers" 
-            :key="server.id" 
-            :server="server" 
-            @toggle="handlePower" 
-            @open-rcon="activeRconServer = server" 
-          />
-        </div>
-      </section>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server Name</label>
+            <input v-model="form.name" type="text" placeholder="Mushroom CS 1.6 Public" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+          </div>
 
-      <!-- Platform Audit Trail -->
-      <ActionLogs :logs="auditLogs" />
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">UDP Port</label>
+              <input v-model.number="form.port" type="number" placeholder="27015" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">RCON Password</label>
+              <input v-model="form.rconPassword" type="password" placeholder="••••••••" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+          </div>
 
-      <!-- Interactive RCON Console -->
-      <RconConsole v-if="activeRconServer" :server="activeRconServer" @close="activeRconServer = null" />
+          <div class="flex items-center space-x-6 pt-2">
+            <label class="flex items-center space-x-2 text-sm text-slate-300 cursor-pointer">
+              <input v-model="form.installMetamod" type="checkbox" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0" />
+              <span>Install Metamod</span>
+            </label>
+            <label class="flex items-center space-x-2 text-sm text-slate-300 cursor-pointer">
+              <input v-model="form.installAmxmodx" type="checkbox" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0" />
+              <span>Install AMX Mod X</span>
+            </label>
+          </div>
 
+          <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showCreateModal = false" class="px-4 py-2 text-slate-400 hover:text-white font-medium text-sm">Cancel</button>
+            <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-indigo-600/30">Create Instance</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import HostStatCard from './components/HostStatCard.vue';
 import ServerMushroomCard from './components/ServerMushroomCard.vue';
 import ActionLogs from './components/ActionLogs.vue';
-import RconConsole from './components/RconConsole.vue';
 
-const hostStats = ref({});
+const stats = ref({ cpuLoad: '0', memUsed: '0', memTotal: '0', uptime: '00:00' });
 const servers = ref([]);
-const auditLogs = ref([]);
-const activeRconServer = ref(null);
-const showModal = ref(false);
+const logs = ref([]);
+const showCreateModal = ref(false);
+
+const form = ref({
+  id: '',
+  name: '',
+  port: 27015,
+  rconPassword: '',
+  game: 'cstrike',
+  installMetamod: true,
+  installAmxmodx: true,
+  freshInstall: true
+});
+
+let timer = null;
 
 async function fetchData() {
-  const [resStats, resServers, resLogs] = await Promise.all([
-    fetch('/api/host/stats').then(r => r.json()),
-    fetch('/api/servers').then(r => r.json()),
-    fetch('/api/audit-logs').then(r => r.json())
-  ]);
-  hostStats.value = resStats;
-  servers.value = resServers;
-  auditLogs.value = resLogs;
+  try {
+    const [statsRes, serversRes, logsRes] = await Promise.all([
+      fetch('/api/host/stats').then(r => r.json()),
+      fetch('/api/servers').then(r => r.json()),
+      fetch('/api/audit-logs').then(r => r.json())
+    ]);
+
+    stats.value = statsRes;
+    servers.value = serversRes;
+    logs.value = logsRes;
+  } catch (err) {
+    console.error('Failed to update dashboard data', err);
+  }
 }
 
-async function handlePower({ id, action }) {
-  await fetch(`/api/servers/${id}/power`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action })
-  });
-  fetchData();
+async function createInstance() {
+  try {
+    const res = await fetch('/api/servers/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form.value)
+    });
+
+    if (res.ok) {
+      showCreateModal.value = false;
+      form.value = { id: '', name: '', port: 27015, rconPassword: '', game: 'cstrike', installMetamod: true, installAmxmodx: true, freshInstall: true };
+      await fetchData();
+    }
+  } catch (err) {
+    console.error('Error creating server instance', err);
+  }
 }
 
 onMounted(() => {
   fetchData();
-  setInterval(fetchData, 5000);
+  timer = setInterval(fetchData, 5000);
+});
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer);
 });
 </script>
