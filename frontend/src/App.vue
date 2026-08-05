@@ -27,7 +27,7 @@
       <h2 class="text-lg font-bold text-white">Active Game Servers</h2>
       
       <div v-if="servers.length === 0" class="bg-[#121829] border border-slate-800 rounded-2xl p-10 text-center text-slate-500">
-        No active game servers running. Click <strong>+ Add HLDS Instance</strong> to launch one.
+        No active game servers running. Click <strong>+ Add HLDS Instance</strong> to launch or import one.
       </div>
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -43,11 +43,11 @@
     <!-- Platform Action Logs -->
     <ActionLogs :logs="logs" />
 
-    <!-- Create Instance Modal -->
+    <!-- Create / Import Instance Modal -->
     <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div class="bg-[#121829] border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-6">
         <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-          <h3 class="text-xl font-bold text-white">Add New HLDS Instance</h3>
+          <h3 class="text-xl font-bold text-white">Add or Import HLDS Instance</h3>
           <button @click="showCreateModal = false" class="text-slate-400 hover:text-white text-xl">✕</button>
         </div>
 
@@ -56,6 +56,26 @@
         </div>
 
         <form @submit.prevent="createInstance" class="space-y-4">
+          <!-- Deployment Type Toggle -->
+          <div class="grid grid-cols-2 gap-2 p-1 bg-[#0b0e17] rounded-xl border border-slate-800">
+            <button 
+              type="button" 
+              @click="form.freshInstall = true"
+              :class="form.freshInstall ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+              class="py-2 text-xs rounded-lg transition-all"
+            >
+              Fresh Container
+            </button>
+            <button 
+              type="button" 
+              @click="form.freshInstall = false"
+              :class="!form.freshInstall ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+              class="py-2 text-xs rounded-lg transition-all"
+            >
+              Import Existing Directory
+            </button>
+          </div>
+
           <div>
             <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server ID</label>
             <input v-model="form.id" type="text" placeholder="cs-ichim" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
@@ -64,6 +84,11 @@
           <div>
             <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server Name</label>
             <input v-model="form.name" type="text" placeholder="CS.iCHiM.NET" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+
+          <div v-if="!form.freshInstall">
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Host Directory Path</label>
+            <input v-model="form.customPath" type="text" placeholder="/srv/hlds/servers/cs-ichim" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
           </div>
 
           <div class="grid grid-cols-2 gap-4">
@@ -80,11 +105,11 @@
           <div class="flex items-center space-x-6 pt-2">
             <label class="flex items-center space-x-2 text-sm text-slate-300 cursor-pointer">
               <input v-model="form.installMetamod" type="checkbox" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0" />
-              <span>Install Metamod</span>
+              <span>Metamod Linked</span>
             </label>
             <label class="flex items-center space-x-2 text-sm text-slate-300 cursor-pointer">
               <input v-model="form.installAmxmodx" type="checkbox" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0" />
-              <span>Install AMX Mod X</span>
+              <span>AMX Mod X Linked</span>
             </label>
           </div>
 
@@ -92,7 +117,7 @@
             <button type="button" @click="showCreateModal = false" :disabled="isSubmitting" class="px-4 py-2 text-slate-400 hover:text-white font-medium text-sm">Cancel</button>
             <button type="submit" :disabled="isSubmitting" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-indigo-600/30 disabled:opacity-50 inline-flex items-center gap-2">
               <span v-if="isSubmitting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-              <span>{{ isSubmitting ? 'Creating Container...' : 'Create Instance' }}</span>
+              <span>{{ isSubmitting ? 'Saving Instance...' : (form.freshInstall ? 'Create Container' : 'Import Instance') }}</span>
             </button>
           </div>
         </form>
@@ -122,7 +147,8 @@ const form = ref({
   game: 'cstrike',
   installMetamod: true,
   installAmxmodx: true,
-  freshInstall: true
+  freshInstall: true,
+  customPath: ''
 });
 
 let timer = null;
@@ -158,10 +184,10 @@ async function createInstance() {
 
     if (res.ok) {
       showCreateModal.value = false;
-      form.value = { id: '', name: '', port: 27015, rconPassword: '', game: 'cstrike', installMetamod: true, installAmxmodx: true, freshInstall: true };
+      form.value = { id: '', name: '', port: 27015, rconPassword: '', game: 'cstrike', installMetamod: true, installAmxmodx: true, freshInstall: true, customPath: '' };
       await fetchData();
     } else {
-      errorMessage.value = data.error || data.message || 'Failed to create instance.';
+      errorMessage.value = data.error || data.message || 'Failed to save instance.';
     }
   } catch (err) {
     errorMessage.value = 'Network error connecting to backend.';

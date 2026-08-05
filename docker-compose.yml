@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    container_name: hlds_panel
+    container_name: mushroom-hlds
     restart: unless-stopped
     ports:
       - "${HOST_PORT:-1338}:1337"
