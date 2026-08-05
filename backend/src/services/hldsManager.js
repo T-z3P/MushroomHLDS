@@ -26,16 +26,34 @@ export async function createServerInstance(params) {
   const containerName = `mushroom-hlds_${id}`;
   const hostMountPath = customPath || `/srv/hlds/servers/${id}`;
 
+  const initialStatus = freshInstall ? 'installing' : 'online';
+
+  // Record instance in database with 'installing' status
+  db.prepare(`
+    INSERT INTO servers (id, name, ip, port, rcon_password, status, map, players, max_players, installed_path, container_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      name=excluded.name,
+      port=excluded.port,
+      rcon_password=excluded.rcon_password,
+      status=excluded.status,
+      installed_path=excluded.installed_path,
+      container_id=excluded.container_id
+  `).run(id, name, '127.0.0.1', port, rconPassword, initialStatus, 'de_dust2', 0, 32, hostMountPath, containerName);
+
   if (freshInstall) {
     await ensureImageExists(imageName);
 
-    // Remove existing container if it exists with the same name
     try {
       const oldContainer = docker.getContainer(containerName);
       await oldContainer.remove({ force: true });
     } catch (e) {
-      // Container didn't exist, proceed
+      // Container didn't exist
     }
+
+    // SteamCMD requires setting mod config explicitly for App ID 90 to download hlds_run
+    const steamCmdArgs = `/home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 validate +quit`;
+    const hldsRunArgs = `/home/steam/hlds/hlds_run -game ${game} +ip 0.0.0.0 +port ${port} +maxplayers 32 +map de_dust2 +rcon_password ${rconPassword}`;
 
     const container = await docker.createContainer({
       Image: imageName,
@@ -43,7 +61,7 @@ export async function createServerInstance(params) {
       Tty: true,
       Cmd: [
         'bash', '-c',
-        `/home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_update 90 -game ${game} validate +quit && /home/steam/hlds/hlds_run -game ${game} +ip 0.0.0.0 +port ${port} +maxplayers 32 +map de_dust2 +rcon_password ${rconPassword}`
+        `${steamCmdArgs} && ${hldsRunArgs}`
       ],
       ExposedPorts: {
         [`${port}/udp`]: {},
@@ -63,17 +81,6 @@ export async function createServerInstance(params) {
 
     await container.start();
   }
-
-  db.prepare(`
-    INSERT INTO servers (id, name, ip, port, rcon_password, status, map, players, max_players, installed_path, container_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      name=excluded.name,
-      port=excluded.port,
-      rcon_password=excluded.rcon_password,
-      installed_path=excluded.installed_path,
-      container_id=excluded.container_id
-  `).run(id, name, '127.0.0.1', port, rconPassword, freshInstall ? 'online' : 'offline', 'de_dust2', 0, 32, hostMountPath, containerName);
 
   return { success: true };
 }
