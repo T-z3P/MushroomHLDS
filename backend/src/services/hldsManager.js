@@ -28,18 +28,18 @@ export async function createServerInstance(params) {
 
   const initialStatus = freshInstall ? 'installing' : 'online';
 
-  // Record instance in database with 'installing' status
   db.prepare(`
-    INSERT INTO servers (id, name, ip, port, rcon_password, status, map, players, max_players, installed_path, container_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO servers (id, name, ip, port, rcon_password, status, map, game, players, max_players, installed_path, container_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name=excluded.name,
       port=excluded.port,
       rcon_password=excluded.rcon_password,
       status=excluded.status,
+      game=excluded.game,
       installed_path=excluded.installed_path,
       container_id=excluded.container_id
-  `).run(id, name, '127.0.0.1', port, rconPassword, initialStatus, 'de_dust2', 0, 32, hostMountPath, containerName);
+  `).run(id, name, '127.0.0.1', port, rconPassword, initialStatus, 'de_dust2', game, 0, 32, hostMountPath, containerName);
 
   if (freshInstall) {
     await ensureImageExists(imageName);
@@ -51,9 +51,9 @@ export async function createServerInstance(params) {
       // Container didn't exist
     }
 
-    // SteamCMD requires setting mod config explicitly for App ID 90 to download hlds_run
-    const steamCmdArgs = `/home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 validate +quit`;
-    const hldsRunArgs = `/home/steam/hlds/hlds_run -game ${game} +ip 0.0.0.0 +port ${port} +maxplayers 32 +map de_dust2 +rcon_password ${rconPassword}`;
+    // Double app_update 90 pass to force SteamCMD to unpack hlds_run for App ID 90
+    const steamCmdArgs = `/home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 +app_update 90 validate +quit`;
+    const hldsRunArgs = `chmod +x /home/steam/hlds/hlds_run && /home/steam/hlds/hlds_run -game ${game} +ip 0.0.0.0 +port ${port} +maxplayers 32 +map de_dust2 +rcon_password ${rconPassword}`;
 
     const container = await docker.createContainer({
       Image: imageName,

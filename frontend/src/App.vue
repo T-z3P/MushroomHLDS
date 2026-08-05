@@ -76,9 +76,21 @@
             </button>
           </div>
 
-          <div>
-            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server ID</label>
-            <input v-model="form.id" type="text" placeholder="cs-ichim" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server ID</label>
+              <input v-model="form.id" type="text" placeholder="cs-ichim" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Game Mod</label>
+              <select v-model="form.game" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
+                <option value="cstrike">Counter-Strike 1.6 (cstrike)</option>
+                <option value="valve">Half-Life Deathmatch (valve)</option>
+                <option value="czero">Condition Zero (czero)</option>
+                <option value="dod">Day of Defeat (dod)</option>
+                <option value="tfc">Team Fortress Classic (tfc)</option>
+              </select>
+            </div>
           </div>
 
           <div>

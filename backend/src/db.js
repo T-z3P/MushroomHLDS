@@ -6,20 +6,16 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Target database path
 const dbDir = path.join(__dirname, '../../data');
 const dbPath = path.join(dbDir, 'database.sqlite');
 
-// Ensure parent directory exists before better-sqlite3 attempts to open/create the file
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
 const db = new Database(dbPath);
-
 db.pragma('journal_mode = WAL');
 
-// Initial Table Creation
 db.exec(`
   CREATE TABLE IF NOT EXISTS servers (
     id TEXT PRIMARY KEY,
@@ -28,6 +24,7 @@ db.exec(`
     port INTEGER NOT NULL,
     rcon_password TEXT NOT NULL,
     status TEXT DEFAULT 'offline',
+    game TEXT DEFAULT 'cstrike',
     map TEXT DEFAULT 'de_dust2',
     players INTEGER DEFAULT 0,
     max_players INTEGER DEFAULT 32,
@@ -43,11 +40,13 @@ db.exec(`
   );
 `);
 
-// Dynamic column checks to ensure existing databases upgrade cleanly
 const columns = db.prepare("PRAGMA table_info(servers)").all().map(c => c.name);
 
 if (!columns.includes('status')) {
   db.exec("ALTER TABLE servers ADD COLUMN status TEXT DEFAULT 'offline'");
+}
+if (!columns.includes('game')) {
+  db.exec("ALTER TABLE servers ADD COLUMN game TEXT DEFAULT 'cstrike'");
 }
 if (!columns.includes('container_id')) {
   db.exec("ALTER TABLE servers ADD COLUMN container_id TEXT");
