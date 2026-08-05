@@ -13,11 +13,10 @@ COPY backend/package*.json ./
 RUN npm install
 COPY backend/ ./
 
-# Copy built frontend assets to backend static directory
 COPY --from=frontend-builder /app/frontend/dist ./public
 
 RUN mkdir -p /app/data /hlds_data
 
-EXPOSE 3000
+EXPOSE 1337
 
 CMD ["npm", "start"]

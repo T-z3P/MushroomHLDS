@@ -1,14 +1,18 @@
+version: '3.8'
+
 services:
   hlds-panel:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: hlds_panel
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "1337:1337"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /srv/hlds/servers:/hlds_data
       - ./data:/app/data
     environment:
-      - PORT=3000
+      - PORT=1337
       - NODE_ENV=production

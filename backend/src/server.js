@@ -74,6 +74,7 @@ fastify.post('/api/servers/:id/rcon', async (req, reply) => {
   }
 });
 
-fastify.listen({ port: 3000, host: '0.0.0.0' }, (err) => {
+const PORT = process.env.PORT || 1337;
+fastify.listen({ port: Number(PORT), host: '0.0.0.0' }, (err) => {
   if (err) throw err;
 });

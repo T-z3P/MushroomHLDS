@@ -85,7 +85,7 @@ MushroomHLDS is a full-stack, containerized game panel built specifically for **
    ```
 
 5. Access UI:
-   Navigate to `http://<SERVER_IP>:3000` in your web browser.
+   Navigate to `http://<SERVER_IP>:1337` in your web browser.
 
 ---
 
@@ -107,7 +107,7 @@ To run backend and frontend separately for local development:
    npm run dev
    ```
    
-   Access the portal at http://localhost:5173 (API requests proxy automatically to port 3000).
+   Access the portal at `http://localhost:5173` (API requests proxy automatically to port `1337`).
 
 ---
 
