@@ -2,7 +2,7 @@
 FROM node:20-slim AS frontend-builder
 WORKDIR /app/frontend
 
-COPY frontend/package*.json ./
+COPY frontend/package.json ./
 RUN npm install --legacy-peer-deps
 
 COPY frontend/ ./
@@ -13,7 +13,7 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Install complete build toolchain + SSL certs for downloading native binaries
+# Install system build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3 \
@@ -22,11 +22,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy backend package manifests
-COPY backend/package*.json ./
+# Copy ONLY package.json (ignoring lockfiles that break docker builds)
+COPY backend/package.json ./
 
-# Run npm install with verbose logging and no-audit to prevent silent crashes
-RUN npm install --omit=dev --legacy-peer-deps --loglevel=verbose --no-audit
+# Clean install from registry
+RUN npm install --omit=dev --legacy-peer-deps
 
 # Copy backend application source code
 COPY backend/ ./
