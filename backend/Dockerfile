@@ -1,17 +1,17 @@
-# Stage 1: Build Frontend (Alpine)
-FROM node:20-alpine AS frontend-builder
+# Stage 1: Build Frontend
+FROM node:20-slim AS frontend-builder
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN npm ci --legacy-peer-deps
+RUN npm install --legacy-peer-deps
 
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Build Backend & Production Image (Debian Slim for Native Modules)
+# Stage 2: Build Backend & Production Image
 FROM node:20-slim
 
-# Install python and build tools required for native gyp modules
+# Install system dependencies required for native Node module compilation
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY backend/package*.json ./
-RUN npm ci --only=production --legacy-peer-deps
+RUN npm install --omit=dev --legacy-peer-deps
 
 COPY backend/ ./
 COPY --from=frontend-builder /app/frontend/dist ./public
