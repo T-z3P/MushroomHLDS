@@ -13,19 +13,18 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Install build essential dependencies required by native C++ modules (better-sqlite3)
+# Install system utilities (curl/ca-certificates needed for prebuilt binary downloads)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    make \
-    g++ \
     sqlite3 \
+    ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend package manifests
 COPY backend/package*.json ./
 
-# Install dependencies with explicit build-from-source flag for native modules
-RUN npm install --omit=dev --legacy-peer-deps --build-from-source
+# Install production dependencies (lets better-sqlite3 download prebuilt binaries)
+RUN npm install --omit=dev --legacy-peer-deps
 
 # Copy backend application source code
 COPY backend/ ./
