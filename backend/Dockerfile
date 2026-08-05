@@ -1,24 +1,28 @@
-# Stage 1: Build Frontend
+# Stage 1: Build Frontend (Alpine)
 FROM node:20-alpine AS frontend-builder
-RUN apk add --no-cache python3 make g++ git
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-# Use --legacy-peer-deps to prevent peer dependency tree crashes
-RUN npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Build Backend & Production Image
-FROM node:20-alpine
-RUN apk add --no-cache python3 make g++ sqlite git
+# Stage 2: Build Backend & Production Image (Debian Slim for Native Modules)
+FROM node:20-slim
+
+# Install python and build tools required for native gyp modules
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY backend/package*.json ./
-# Use --build-from-source for native binaries like better-sqlite3
-RUN npm install --legacy-peer-deps --build-from-source
+RUN npm ci --only=production --legacy-peer-deps
 
 COPY backend/ ./
 COPY --from=frontend-builder /app/frontend/dist ./public
