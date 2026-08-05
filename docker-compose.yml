@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  mushroom-hlds:
+  ui:
     build:
       context: .
       dockerfile: backend/Dockerfile
