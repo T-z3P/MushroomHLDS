@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  hlds-panel:
+  mushroom-hlds:
     build:
       context: .
       dockerfile: backend/Dockerfile
