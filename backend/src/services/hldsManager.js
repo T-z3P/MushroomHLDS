@@ -51,16 +51,20 @@ export async function createServerInstance(params) {
       // Container didn't exist
     }
 
-    // Shell script executed inside the container
+    // Robust shell execution script
     const initScript = `
       mkdir -p /home/steam/hlds && 
-      /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_update 90 validate +quit && 
-      /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +quit && 
-      if [ -f /home/steam/hlds/hlds_run ]; then 
-        chmod +x /home/steam/hlds/hlds_run && 
-        /home/steam/hlds/hlds_run -game ${game} +ip 0.0.0.0 +port ${port} +maxplayers 32 +map de_dust2 +rcon_password ${rconPassword}; 
+      cd /home/steam/hlds && 
+      /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 validate +quit && 
+      if [ ! -f /home/steam/hlds/hlds_run ] && [ -f /home/steam/hlds/hlds_linux ]; then 
+        echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux "$@"' > /home/steam/hlds/hlds_run && 
+        chmod +x /home/steam/hlds/hlds_run; 
+      fi && 
+      if [ -f /home/steam/hlds/hlds_run ] || [ -f /home/steam/hlds/hlds_linux ]; then 
+        chmod +x /home/steam/hlds/hlds_* && 
+        ./hlds_run -game ${game} +ip 0.0.0.0 +port ${port} +maxplayers 32 +map de_dust2 +rcon_password ${rconPassword}; 
       else 
-        echo "HLDS installation failed: hlds_run binary not found in /home/steam/hlds"; 
+        echo "HLDS installation failed: neither hlds_run nor hlds_linux binary was found in /home/steam/hlds"; 
         sleep 60; 
       fi
     `.replace(/\s+/g, ' ').trim();
