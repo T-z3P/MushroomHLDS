@@ -37,6 +37,7 @@
           :server="server" 
           @refresh="fetchData" 
           @edit="openEditModal"
+          @rcon="openRconModal"
         />
       </div>
     </section>
@@ -69,7 +70,7 @@
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server ID</label>
-              <input v-model="form.id" type="text" placeholder="cs-server-1" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+              <input v-model="form.id" type="text" placeholder="cs.ichim.net" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
             </div>
           </div>
 
@@ -118,7 +119,6 @@
             <textarea v-model="form.startCmd" rows="2" class="w-full font-mono text-xs bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-indigo-300 focus:outline-none focus:border-indigo-500"></textarea>
           </div>
 
-          <!-- Action Selection -->
           <div class="pt-2 border-t border-slate-800 space-y-3">
             <span class="block text-xs font-bold text-slate-300 uppercase tracking-wider">Select an Action to Perform:</span>
             
@@ -132,7 +132,7 @@
 
             <div v-if="form.actionType === 'link'" class="pl-7 space-y-2">
               <label class="block text-xs text-slate-400">Absolute Path of the Server Executable</label>
-              <input v-model="form.execPath" type="text" placeholder="/srv/hlds/servers/cs16/hlds_run" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+              <input v-model="form.execPath" type="text" placeholder="/srv/hlds/servers/cs.ichim.net/hlds_run" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
             </div>
 
             <label class="flex items-start space-x-3 cursor-pointer">
@@ -145,7 +145,7 @@
 
             <div v-if="form.actionType === 'create'" class="pl-7 space-y-2">
               <label class="block text-xs text-slate-400">Absolute Path for the New Game Server Directory</label>
-              <input v-model="form.customPath" type="text" placeholder="/srv/hlds/servers/cs16/" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+              <input v-model="form.customPath" type="text" placeholder="/srv/hlds/servers/cs.ichim.net/" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
             </div>
           </div>
 
@@ -200,7 +200,6 @@
             <textarea v-model="editForm.start_cmd" rows="2" class="w-full font-mono text-xs bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-indigo-300 focus:outline-none focus:border-indigo-500"></textarea>
           </div>
 
-          <!-- Delete Action Confirmation Box -->
           <div class="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-3">
             <span class="block text-xs font-bold text-rose-400 uppercase tracking-wider">Danger Zone</span>
             <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
@@ -226,6 +225,27 @@
         </form>
       </div>
     </div>
+
+    <!-- RCON Console Modal -->
+    <div v-if="showRconModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div class="bg-[#121829] border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+          <h3 class="text-xl font-bold text-white">RCON Console — {{ activeRconServer.name }}</h3>
+          <button @click="showRconModal = false" class="text-slate-400 hover:text-white text-xl">✕</button>
+        </div>
+
+        <div class="bg-black/80 rounded-xl p-4 font-mono text-xs text-emerald-400 h-64 overflow-y-auto space-y-2 border border-slate-800">
+          <div v-for="(log, idx) in rconLogs" :key="idx" :class="log.type === 'cmd' ? 'text-indigo-400' : 'text-emerald-300'">
+            {{ log.text }}
+          </div>
+        </div>
+
+        <form @submit.prevent="sendRcon" class="flex gap-2">
+          <input v-model="rconInput" type="text" placeholder="Type command (e.g. status, changelevel de_inferno)..." class="flex-1 bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500" />
+          <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-xs">Send</button>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -240,9 +260,14 @@ const servers = ref([]);
 const logs = ref([]);
 const showAddModal = ref(false);
 const showEditModal = ref(false);
+const showRconModal = ref(false);
 const isSubmitting = ref(false);
 const deleteFilesOption = ref(false);
 const errorMessage = ref('');
+
+const activeRconServer = ref(null);
+const rconInput = ref('');
+const rconLogs = ref([]);
 
 const form = ref({
   id: '',
@@ -263,7 +288,7 @@ const form = ref({
 const editForm = ref({});
 
 function updateCmdTemplate() {
-  form.value.startCmd = `./hlds_run -game ${form.value.game} +ip {ip} +port {port} +maxplayers {slots} +map {cfg1} -pingboost {cfg2} -autoupdate`;
+  form.value.startCmd = `./hlds_run -game ${form.value.game} +ip 0.0.0.0 +port ${form.value.port} +maxplayers ${form.value.slots} +map ${form.value.map} -pingboost ${form.value.pingboost} +rcon_password ${form.value.rconPassword}`;
 }
 
 function openAddModal() {
@@ -275,6 +300,31 @@ function openEditModal(server) {
   editForm.value = { ...server };
   deleteFilesOption.value = false;
   showEditModal.value = true;
+}
+
+function openRconModal(server) {
+  activeRconServer.value = server;
+  rconLogs.value = [{ type: 'res', text: `Connected to RCON on ${server.ip}:${server.port}` }];
+  showRconModal.value = true;
+}
+
+async function sendRcon() {
+  if (!rconInput.value.trim()) return;
+  const cmd = rconInput.value.trim();
+  rconLogs.value.push({ type: 'cmd', text: `> ${cmd}` });
+  rconInput.value = '';
+
+  try {
+    const res = await fetch(`/api/servers/${encodeURIComponent(activeRconServer.value.id)}/rcon`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: cmd })
+    });
+    const data = await res.json();
+    rconLogs.value.push({ type: 'res', text: data.response || data.error || 'No response.' });
+  } catch (err) {
+    rconLogs.value.push({ type: 'res', text: 'RCON transmission error.' });
+  }
 }
 
 async function fetchData() {

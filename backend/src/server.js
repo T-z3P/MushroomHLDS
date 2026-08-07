@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 
 import db from './db.js';
 import { getHostStats } from './services/sysStats.js';
-import { createServerInstance, updateServerInstance, deleteServerInstance, controlContainer, getServersWithLiveStatus } from './services/hldsManager.js';
+import { createServerInstance, updateServerInstance, deleteServerInstance, controlContainer, getServersWithLiveStatus, sendRconCommand } from './services/hldsManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -57,15 +57,31 @@ fastify.post('/api/servers/delete', async (request, reply) => {
   }
 });
 
-fastify.post('/api/servers/:id/control', async (request, reply) => {
-  const { id } = request.params;
+// Wildcard parameter fixes routing for IDs containing dots (e.g. cs.ichim.net)
+fastify.post('/api/servers/*\/control', async (request, reply) => {
+  const fullPath = request.params['*'];
+  const id = fullPath.replace(/\/control$/, '');
   const { action } = request.body;
+
   const success = await controlContainer(id, action);
   if (success) {
     db.prepare('INSERT INTO audit_logs (action, user) VALUES (?, ?)').run(`Executed ${action} on ${id}`, 'Admin');
     return { success: true };
   }
   reply.status(500).send({ error: `Failed to ${action} server` });
+});
+
+fastify.post('/api/servers/*\/rcon', async (request, reply) => {
+  const fullPath = request.params['*'];
+  const id = fullPath.replace(/\/rcon$/, '');
+  const { command } = request.body;
+
+  try {
+    const response = await sendRconCommand(id, command);
+    return { success: true, response };
+  } catch (err) {
+    reply.status(500).send({ error: err.message });
+  }
 });
 
 fastify.get('/api/audit-logs', async () => {

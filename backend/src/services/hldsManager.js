@@ -1,5 +1,7 @@
 import Docker from 'dockerode';
 import fs from 'fs';
+import path from 'path';
+import { GameDig } from 'gamedig';
 import db from '../db.js';
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
@@ -25,24 +27,43 @@ export async function getServersWithLiveStatus() {
   const servers = db.prepare('SELECT * FROM servers').all();
 
   for (const server of servers) {
-    if (server.container_id) {
-      try {
-        const container = docker.getContainer(server.container_id);
-        const inspect = await container.inspect();
-        
-        if (inspect.State.Running) {
+    const containerName = server.container_id || `mushroom-hlds_${server.id}`;
+
+    try {
+      const container = docker.getContainer(containerName);
+      const inspect = await container.inspect();
+
+      if (inspect.State.Running) {
+        server.status = 'online';
+
+        try {
+          const state = await GameDig.query({
+            type: 'cs16',
+            host: '127.0.0.1',
+            port: Number(server.port)
+          });
+
+          server.map = state.map || server.map;
+          server.players = state.players ? state.players.length : server.players;
+          server.max_players = state.maxplayers || server.max_players;
+
+          db.prepare('UPDATE servers SET status = ?, map = ?, players = ?, max_players = ? WHERE id = ?').run(
+            'online',
+            server.map,
+            server.players,
+            server.max_players,
+            server.id
+          );
+        } catch (queryErr) {
           db.prepare("UPDATE servers SET status = 'online' WHERE id = ?").run(server.id);
-          server.status = 'online';
-        } else {
-          db.prepare("UPDATE servers SET status = 'offline' WHERE id = ?").run(server.id);
-          server.status = 'offline';
         }
-      } catch (err) {
-        if (server.status !== 'offline') {
-          db.prepare("UPDATE servers SET status = 'offline' WHERE id = ?").run(server.id);
-          server.status = 'offline';
-        }
+      } else {
+        server.status = 'offline';
+        db.prepare("UPDATE servers SET status = 'offline' WHERE id = ?").run(server.id);
       }
+    } catch (err) {
+      server.status = 'offline';
+      db.prepare("UPDATE servers SET status = 'offline' WHERE id = ?").run(server.id);
     }
   }
 
@@ -68,9 +89,10 @@ export async function createServerInstance(params) {
 
   const imageName = 'cm2network/steamcmd:latest';
   const containerName = `mushroom-hlds_${id}`;
-  const hostMountPath = customPath || `/srv/hlds/servers/${id}`;
-  const isFresh = actionType === 'create';
-  const initialStatus = isFresh ? 'installing' : 'offline';
+
+  const hostMountPath = actionType === 'link'
+    ? (execPath ? execPath.substring(0, execPath.lastIndexOf('/')) : `/srv/hlds/servers/${id}`)
+    : (customPath || `/srv/hlds/servers/${id}`);
 
   const cleanMap = (map && !map.includes('{')) ? map : 'de_dust2';
   const cleanSlots = Number(slots) || 32;
@@ -96,60 +118,61 @@ export async function createServerInstance(params) {
       installed_path=excluded.installed_path,
       exec_path=excluded.exec_path,
       container_id=excluded.container_id
-  `).run(id, name, '127.0.0.1', port, queryPort, rconPassword, initialStatus, game, cleanMap, 0, cleanSlots, cleanPingboost, formattedCmd, hostMountPath, execPath, containerName);
+  `).run(id, name, '127.0.0.1', port, queryPort, rconPassword, 'installing', game, cleanMap, 0, cleanSlots, cleanPingboost, formattedCmd, hostMountPath, execPath, containerName);
 
-  if (isFresh) {
-    await ensureImageExists(imageName);
+  await ensureImageExists(imageName);
 
-    try {
-      const oldContainer = docker.getContainer(containerName);
-      await oldContainer.remove({ force: true });
-    } catch (e) {}
+  try {
+    const oldContainer = docker.getContainer(containerName);
+    await oldContainer.remove({ force: true });
+  } catch (e) {}
 
-    const initScript = `
-      mkdir -p /home/steam/hlds && 
-      cd /home/steam/hlds && 
-      /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +quit && 
-      if [ ! -f /home/steam/hlds/hlds_run ] && [ -f /home/steam/hlds/hlds_linux ]; then 
-        echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux "$@"' > /home/steam/hlds/hlds_run && 
-        chmod +x /home/steam/hlds/hlds_run; 
-      fi && 
-      if [ -f /home/steam/hlds/hlds_run ] || [ -f /home/steam/hlds/hlds_linux ]; then 
-        chmod +x /home/steam/hlds/hlds_* && 
-        ${formattedCmd}; 
-      else 
-        echo "HLDS installation failed: hlds_run/hlds_linux missing"; 
-        sleep 30; 
-      fi
-    `.replace(/\s+/g, ' ').trim();
+  const initScript = actionType === 'link' ? `
+    mkdir -p /home/steam/hlds && 
+    cd /home/steam/hlds && 
+    if [ ! -f /home/steam/hlds/hlds_run ] && [ -f /home/steam/hlds/hlds_linux ]; then 
+      echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux "$@"' > /home/steam/hlds/hlds_run && 
+      chmod +x /home/steam/hlds/hlds_run; 
+    fi && 
+    chmod +x /home/steam/hlds/hlds_* && 
+    ${formattedCmd}
+  `.replace(/\s+/g, ' ').trim() : `
+    mkdir -p /home/steam/hlds && 
+    cd /home/steam/hlds && 
+    /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +quit && 
+    if [ ! -f /home/steam/hlds/hlds_run ] && [ -f /home/steam/hlds/hlds_linux ]; then 
+      echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux "$@"' > /home/steam/hlds/hlds_run && 
+      chmod +x /home/steam/hlds/hlds_run; 
+    fi && 
+    chmod +x /home/steam/hlds/hlds_* && 
+    ${formattedCmd}
+  `.replace(/\s+/g, ' ').trim();
 
-    const container = await docker.createContainer({
-      Image: imageName,
-      name: containerName,
-      User: 'steam',
-      Tty: true,
-      Cmd: ['bash', '-c', initScript],
-      ExposedPorts: {
-        [`${port}/udp`]: {},
-        [`${port}/tcp`]: {},
-        [`${queryPort}/udp`]: {}
+  const container = await docker.createContainer({
+    Image: imageName,
+    name: containerName,
+    User: 'steam',
+    Tty: true,
+    Cmd: ['bash', '-c', initScript],
+    ExposedPorts: {
+      [`${port}/udp`]: {},
+      [`${port}/tcp`]: {},
+      [`${queryPort}/udp`]: {}
+    },
+    HostConfig: {
+      PortBindings: {
+        [`${port}/udp`]: [{ HostPort: String(port) }],
+        [`${port}/tcp`]: [{ HostPort: String(port) }],
+        [`${queryPort}/udp`]: [{ HostPort: String(queryPort) }]
       },
-      HostConfig: {
-        PortBindings: {
-          [`${port}/udp`]: [{ HostPort: String(port) }],
-          [`${port}/tcp`]: [{ HostPort: String(port) }],
-          [`${queryPort}/udp`]: [{ HostPort: String(queryPort) }]
-        },
-        Binds: [
-          `${hostMountPath}:/home/steam/hlds`
-        ],
-        RestartPolicy: { Name: 'unless-stopped' }
-      }
-    });
+      Binds: [
+        `${hostMountPath}:/home/steam/hlds`
+      ],
+      RestartPolicy: { Name: 'unless-stopped' }
+    }
+  });
 
-    await container.start();
-  }
-
+  await container.start();
   return { success: true };
 }
 
@@ -170,8 +193,8 @@ export async function deleteServerInstance(id, deleteFiles = false) {
   if (!server) return { success: false, error: 'Server entry not found' };
 
   // 1. Remove Docker Container
+  const containerName = server.container_id || `mushroom-hlds_${id}`;
   try {
-    const containerName = server.container_id || `mushroom-hlds_${id}`;
     const container = docker.getContainer(containerName);
     await container.stop().catch(() => {});
     await container.remove({ force: true }).catch(() => {});
@@ -179,18 +202,23 @@ export async function deleteServerInstance(id, deleteFiles = false) {
     console.error(`Container cleanup error for ${id}:`, err);
   }
 
-  // 2. Optionally Delete Files from OS level
+  // 2. Delete Files from OS level via /hlds_data mount mapping
   if (deleteFiles && server.installed_path) {
     try {
-      if (fs.existsSync(server.installed_path)) {
+      const folderName = path.basename(server.installed_path);
+      const containerPath = path.join('/hlds_data', folderName);
+
+      if (fs.existsSync(containerPath)) {
+        fs.rmSync(containerPath, { recursive: true, force: true });
+      } else if (fs.existsSync(server.installed_path)) {
         fs.rmSync(server.installed_path, { recursive: true, force: true });
       }
     } catch (err) {
-      console.error(`OS file cleanup error for ${server.installed_path}:`, err);
+      console.error(`OS file deletion error for ${server.installed_path}:`, err);
     }
   }
 
-  // 3. Remove entry from SQLite database
+  // 3. Purge DB record
   db.prepare('DELETE FROM servers WHERE id = ?').run(id);
 
   return { success: true };
@@ -198,7 +226,8 @@ export async function deleteServerInstance(id, deleteFiles = false) {
 
 export async function controlContainer(id, action) {
   try {
-    const containerName = `mushroom-hlds_${id}`;
+    const server = db.prepare('SELECT container_id FROM servers WHERE id = ?').get(id);
+    const containerName = server?.container_id || `mushroom-hlds_${id}`;
     const container = docker.getContainer(containerName);
 
     if (action === 'start') await container.start();
@@ -214,4 +243,19 @@ export async function controlContainer(id, action) {
     console.error(`Failed to execute ${action} on container mushroom-hlds_${id}:`, err);
     return false;
   }
+}
+
+export async function sendRconCommand(id, command) {
+  const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(id);
+  if (!server) throw new Error('Server not found');
+
+  const state = await GameDig.query({
+    type: 'cs16',
+    host: '127.0.0.1',
+    port: Number(server.port),
+    rconPassword: server.rcon_password,
+    rconCommand: command
+  });
+
+  return state.raw?.rconResponse || 'Command sent successfully.';
 }
