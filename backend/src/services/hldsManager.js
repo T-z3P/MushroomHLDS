@@ -1,9 +1,10 @@
 import Docker from 'dockerode';
 import fs from 'fs';
 import path from 'path';
-import { GameDig } from 'gamedig';
+import gamedig from 'gamedig';
 import db from '../db.js';
 
+const { GameDig } = gamedig;
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 async function ensureImageExists(imageName) {
