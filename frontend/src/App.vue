@@ -8,7 +8,7 @@
       </div>
 
       <button 
-        @click="showCreateModal = true"
+        @click="openAddModal"
         class="inline-flex items-center justify-center px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition-all duration-200 cursor-pointer active:scale-95"
       >
         + Add HLDS Instance
@@ -27,7 +27,7 @@
       <h2 class="text-lg font-bold text-white">Active Game Servers</h2>
       
       <div v-if="servers.length === 0" class="bg-[#121829] border border-slate-800 rounded-2xl p-10 text-center text-slate-500">
-        No active game servers running. Click <strong>+ Add HLDS Instance</strong> to launch or import one.
+        No active game servers running. Click <strong>+ Add HLDS Instance</strong> to launch or link one.
       </div>
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -36,6 +36,7 @@
           :key="server.id" 
           :server="server" 
           @refresh="fetchData" 
+          @edit="openEditModal"
         />
       </div>
     </section>
@@ -43,93 +44,166 @@
     <!-- Platform Action Logs -->
     <ActionLogs :logs="logs" />
 
-    <!-- Create / Import Instance Modal -->
-    <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div class="bg-[#121829] border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-6">
+    <!-- Add / Link Server Modal -->
+    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+      <div class="bg-[#121829] border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-6 my-8">
         <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-          <h3 class="text-xl font-bold text-white">Add or Import HLDS Instance</h3>
-          <button @click="showCreateModal = false" class="text-slate-400 hover:text-white text-xl">✕</button>
+          <h3 class="text-xl font-bold text-white">Add New Server</h3>
+          <button @click="showAddModal = false" class="text-slate-400 hover:text-white text-xl">✕</button>
         </div>
 
         <div v-if="errorMessage" class="bg-red-500/10 border border-red-500/30 text-red-400 text-sm p-3 rounded-xl">
           {{ errorMessage }}
         </div>
 
-        <form @submit.prevent="createInstance" class="space-y-4">
-          <!-- Deployment Type Toggle -->
-          <div class="grid grid-cols-2 gap-2 p-1 bg-[#0b0e17] rounded-xl border border-slate-800">
-            <button 
-              type="button" 
-              @click="form.freshInstall = true"
-              :class="form.freshInstall ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
-              class="py-2 text-xs rounded-lg transition-all"
-            >
-              Fresh Container
-            </button>
-            <button 
-              type="button" 
-              @click="form.freshInstall = false"
-              :class="!form.freshInstall ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
-              class="py-2 text-xs rounded-lg transition-all"
-            >
-              Import Existing Directory
-            </button>
-          </div>
-
+        <form @submit.prevent="submitAdd" class="space-y-4 text-sm">
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server ID</label>
-              <input v-model="form.id" type="text" placeholder="cs-ichim" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Game</label>
+              <select v-model="form.game" @change="updateCmdTemplate" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
+                <option value="cstrike">Counter-Strike 1.6</option>
+                <option value="valve">Half-Life Deathmatch</option>
+                <option value="czero">Condition Zero</option>
+                <option value="dod">Day of Defeat</option>
+              </select>
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Game Mod</label>
-              <select v-model="form.game" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
-                <option value="cstrike">Counter-Strike 1.6 (cstrike)</option>
-                <option value="valve">Half-Life Deathmatch (valve)</option>
-                <option value="czero">Condition Zero (czero)</option>
-                <option value="dod">Day of Defeat (dod)</option>
-                <option value="tfc">Team Fortress Classic (tfc)</option>
-              </select>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server ID</label>
+              <input v-model="form.id" type="text" placeholder="cs-server-1" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
             </div>
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server Name</label>
-            <input v-model="form.name" type="text" placeholder="CS.iCHiM.NET" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            <input v-model="form.name" type="text" placeholder="CS 1.6 Public Server" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
           </div>
 
-          <div v-if="!form.freshInstall">
-            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Host Directory Path</label>
-            <input v-model="form.customPath" type="text" placeholder="/srv/hlds/servers/cs-ichim" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server Port</label>
+              <input v-model.number="form.port" type="number" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Query Port</label>
+              <input v-model.number="form.queryPort" type="number" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Slots</label>
+              <input v-model.number="form.slots" type="number" min="1" max="32" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">UDP Port</label>
-              <input v-model.number="form.port" type="number" placeholder="27015" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Default Map</label>
+              <input v-model="form.map" type="text" placeholder="de_dust2" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">RCON Password</label>
-              <input v-model="form.rconPassword" type="password" placeholder="••••••••" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Pingboost</label>
+              <select v-model.number="form.pingboost" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
+                <option :value="1">1 (Low CPU)</option>
+                <option :value="2">2 (Balanced)</option>
+                <option :value="3">3 (High Performance)</option>
+              </select>
             </div>
           </div>
 
-          <div class="flex items-center space-x-6 pt-2">
-            <label class="flex items-center space-x-2 text-sm text-slate-300 cursor-pointer">
-              <input v-model="form.installMetamod" type="checkbox" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0" />
-              <span>Metamod Linked</span>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">RCON Password</label>
+            <input v-model="form.rconPassword" type="password" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Start Command Template</label>
+            <textarea v-model="form.startCmd" rows="2" class="w-full font-mono text-xs bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-indigo-300 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <!-- Action Selection -->
+          <div class="pt-2 border-t border-slate-800 space-y-3">
+            <span class="block text-xs font-bold text-slate-300 uppercase tracking-wider">Select an Action to Perform:</span>
+            
+            <label class="flex items-start space-x-3 cursor-pointer">
+              <input type="radio" value="link" v-model="form.actionType" class="mt-1 text-indigo-600 focus:ring-0" />
+              <div>
+                <span class="font-semibold text-white block">Link An Existing Game Server</span>
+                <span class="text-xs text-slate-400">Attach an already compiled server binary on the host machine.</span>
+              </div>
             </label>
-            <label class="flex items-center space-x-2 text-sm text-slate-300 cursor-pointer">
-              <input v-model="form.installAmxmodx" type="checkbox" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0" />
-              <span>AMX Mod X Linked</span>
+
+            <div v-if="form.actionType === 'link'" class="pl-7 space-y-2">
+              <label class="block text-xs text-slate-400">Absolute Path of the Server Executable</label>
+              <input v-model="form.execPath" type="text" placeholder="/srv/hlds/servers/cs16/hlds_run" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+
+            <label class="flex items-start space-x-3 cursor-pointer">
+              <input type="radio" value="create" v-model="form.actionType" class="mt-1 text-indigo-600 focus:ring-0" />
+              <div>
+                <span class="font-semibold text-white block">Create A New Game Server</span>
+                <span class="text-xs text-slate-400">Download and initialize new GoldSrc server files via SteamCMD.</span>
+              </div>
             </label>
+
+            <div v-if="form.actionType === 'create'" class="pl-7 space-y-2">
+              <label class="block text-xs text-slate-400">Absolute Path for the New Game Server Directory</label>
+              <input v-model="form.customPath" type="text" placeholder="/srv/hlds/servers/cs16/" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
           </div>
 
           <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-800">
-            <button type="button" @click="showCreateModal = false" :disabled="isSubmitting" class="px-4 py-2 text-slate-400 hover:text-white font-medium text-sm">Cancel</button>
-            <button type="submit" :disabled="isSubmitting" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-indigo-600/30 disabled:opacity-50 inline-flex items-center gap-2">
-              <span v-if="isSubmitting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-              <span>{{ isSubmitting ? 'Saving Instance...' : (form.freshInstall ? 'Create Container' : 'Import Instance') }}</span>
+            <button type="button" @click="showAddModal = false" class="px-4 py-2 text-slate-400 hover:text-white font-medium">Cancel</button>
+            <button type="submit" :disabled="isSubmitting" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 disabled:opacity-50">
+              {{ isSubmitting ? 'Saving...' : 'Add New Server' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Server Modal -->
+    <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+      <div class="bg-[#121829] border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-6">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+          <h3 class="text-xl font-bold text-white">Edit Server Entry: {{ editForm.id }}</h3>
+          <button @click="showEditModal = false" class="text-slate-400 hover:text-white text-xl">✕</button>
+        </div>
+
+        <form @submit.prevent="submitEdit" class="space-y-4 text-sm">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server Name</label>
+            <input v-model="editForm.name" type="text" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Server Port</label>
+              <input v-model.number="editForm.port" type="number" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Query Port</label>
+              <input v-model.number="editForm.query_port" type="number" required class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Default Map</label>
+              <input v-model="editForm.map" type="text" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Max Slots</label>
+              <input v-model.number="editForm.max_players" type="number" class="w-full bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Start Command Template</label>
+            <textarea v-model="editForm.start_cmd" rows="2" class="w-full font-mono text-xs bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-indigo-300 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showEditModal = false" class="px-4 py-2 text-slate-400 hover:text-white font-medium">Cancel</button>
+            <button type="submit" :disabled="isSubmitting" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 disabled:opacity-50">
+              Save Changes
             </button>
           </div>
         </form>
@@ -147,23 +221,42 @@ import ActionLogs from './components/ActionLogs.vue';
 const stats = ref({ cpuLoad: '0', memUsed: '0', memTotal: '0', uptime: '00:00' });
 const servers = ref([]);
 const logs = ref([]);
-const showCreateModal = ref(false);
+const showAddModal = ref(false);
+const showEditModal = ref(false);
 const isSubmitting = ref(false);
 const errorMessage = ref('');
 
 const form = ref({
   id: '',
   name: '',
-  port: 27015,
-  rconPassword: '',
   game: 'cstrike',
-  installMetamod: true,
-  installAmxmodx: true,
-  freshInstall: true,
-  customPath: ''
+  port: 27015,
+  queryPort: 27015,
+  slots: 32,
+  map: 'de_dust2',
+  pingboost: 2,
+  rconPassword: '',
+  startCmd: '',
+  actionType: 'create',
+  customPath: '',
+  execPath: ''
 });
 
-let timer = null;
+const editForm = ref({});
+
+function updateCmdTemplate() {
+  form.value.startCmd = `./hlds_run -game ${form.value.game} +ip {ip} +port {port} +maxplayers {slots} +map {cfg1} -pingboost {cfg2} -autoupdate`;
+}
+
+function openAddModal() {
+  updateCmdTemplate();
+  showAddModal.value = true;
+}
+
+function openEditModal(server) {
+  editForm.value = { ...server };
+  showEditModal.value = true;
+}
 
 async function fetchData() {
   try {
@@ -181,7 +274,7 @@ async function fetchData() {
   }
 }
 
-async function createInstance() {
+async function submitAdd() {
   isSubmitting.value = true;
   errorMessage.value = '';
 
@@ -192,14 +285,12 @@ async function createInstance() {
       body: JSON.stringify(form.value)
     });
 
-    const data = await res.json();
-
     if (res.ok) {
-      showCreateModal.value = false;
-      form.value = { id: '', name: '', port: 27015, rconPassword: '', game: 'cstrike', installMetamod: true, installAmxmodx: true, freshInstall: true, customPath: '' };
+      showAddModal.value = false;
       await fetchData();
     } else {
-      errorMessage.value = data.error || data.message || 'Failed to save instance.';
+      const data = await res.json();
+      errorMessage.value = data.error || 'Failed to save server instance.';
     }
   } catch (err) {
     errorMessage.value = 'Network error connecting to backend.';
@@ -208,6 +299,27 @@ async function createInstance() {
   }
 }
 
+async function submitEdit() {
+  isSubmitting.value = true;
+  try {
+    const res = await fetch('/api/servers/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm.value)
+    });
+
+    if (res.ok) {
+      showEditModal.value = false;
+      await fetchData();
+    }
+  } catch (err) {
+    console.error('Failed to update server instance', err);
+  } finally {
+    isSubmitting.value = false;
+  }
+}
+
+let timer = null;
 onMounted(() => {
   fetchData();
   timer = setInterval(fetchData, 5000);

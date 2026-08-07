@@ -9,7 +9,7 @@
           <h3 class="font-bold text-white text-base leading-tight">{{ server.name }}</h3>
           <p class="text-xs text-slate-400 mt-0.5">
             <span v-if="server.status === 'installing'" class="text-amber-400 font-medium inline-flex items-center gap-1">
-              <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> Installing HLDS...
+              <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> Installing...
             </span>
             <span v-else-if="server.status === 'online'" class="text-emerald-400 font-medium">
               {{ server.map }} • {{ server.players }}/{{ server.max_players }} Players
@@ -50,12 +50,20 @@
 
     <div class="flex items-center justify-between pt-3 border-t border-slate-800/80 text-xs">
       <span class="font-mono text-slate-500">127.0.0.1:{{ server.port }}</span>
-      <button 
-        :disabled="server.status === 'installing'"
-        class="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 font-medium rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-      >
-        RCON Console
-      </button>
+      <div class="flex items-center space-x-2">
+        <button 
+          @click="$emit('edit', server)"
+          class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+        >
+          ⚙ Edit
+        </button>
+        <button 
+          :disabled="server.status === 'installing'"
+          class="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 font-medium rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          RCON Console
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -68,7 +76,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['refresh']);
+const emit = defineEmits(['refresh', 'edit']);
 
 async function handleControl(action) {
   try {

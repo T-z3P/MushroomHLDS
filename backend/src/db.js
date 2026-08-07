@@ -20,16 +20,20 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS servers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    ip TEXT NOT NULL,
+    ip TEXT DEFAULT '127.0.0.1',
     port INTEGER NOT NULL,
+    query_port INTEGER DEFAULT 27015,
     rcon_password TEXT NOT NULL,
     status TEXT DEFAULT 'offline',
     game TEXT DEFAULT 'cstrike',
     map TEXT DEFAULT 'de_dust2',
     players INTEGER DEFAULT 0,
     max_players INTEGER DEFAULT 32,
+    pingboost INTEGER DEFAULT 2,
+    start_cmd TEXT,
     container_id TEXT,
-    installed_path TEXT
+    installed_path TEXT,
+    exec_path TEXT
   );
 
   CREATE TABLE IF NOT EXISTS audit_logs (
@@ -42,17 +46,19 @@ db.exec(`
 
 const columns = db.prepare("PRAGMA table_info(servers)").all().map(c => c.name);
 
-if (!columns.includes('status')) {
-  db.exec("ALTER TABLE servers ADD COLUMN status TEXT DEFAULT 'offline'");
-}
-if (!columns.includes('game')) {
-  db.exec("ALTER TABLE servers ADD COLUMN game TEXT DEFAULT 'cstrike'");
-}
-if (!columns.includes('container_id')) {
-  db.exec("ALTER TABLE servers ADD COLUMN container_id TEXT");
-}
-if (!columns.includes('installed_path')) {
-  db.exec("ALTER TABLE servers ADD COLUMN installed_path TEXT");
+const newCols = [
+  ['query_port', 'INTEGER DEFAULT 27015'],
+  ['pingboost', 'INTEGER DEFAULT 2'],
+  ['start_cmd', 'TEXT'],
+  ['exec_path', 'TEXT'],
+  ['game', "TEXT DEFAULT 'cstrike'"],
+  ['status', "TEXT DEFAULT 'offline'"]
+];
+
+for (const [col, type] of newCols) {
+  if (!columns.includes(col)) {
+    db.exec(`ALTER TABLE servers ADD COLUMN ${col} ${type}`);
+  }
 }
 
 export default db;
