@@ -39,7 +39,7 @@ export async function createServerInstance(params) {
 
   const imageName = 'cm2network/steamcmd:latest';
   const containerName = `mushroom-hlds_${id}`;
-  const hostMountPath = customPath || `/srv/hlds/${id}`;
+  const hostMountPath = customPath || `/srv/hlds/servers/${id}`;
   const isFresh = actionType === 'create';
   const initialStatus = isFresh ? 'installing' : 'offline';
 
@@ -70,12 +70,9 @@ export async function createServerInstance(params) {
       await oldContainer.remove({ force: true });
     } catch (e) {}
 
-    // 1. Grant permissions to /home/steam/hlds inside container
-    // 2. Run steamcmd to install App 90 with -beta steam_legacy
-    // 3. Fallback to hlds_linux wrapper if hlds_run is missing
+    // Run purely as unprivileged 'steam' user inside /home/steam/hlds
     const initScript = `
       mkdir -p /home/steam/hlds && 
-      chmod -R 777 /home/steam/hlds && 
       cd /home/steam/hlds && 
       /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +quit && 
       if [ ! -f /home/steam/hlds/hlds_run ] && [ -f /home/steam/hlds/hlds_linux ]; then 
@@ -83,18 +80,18 @@ export async function createServerInstance(params) {
         chmod +x /home/steam/hlds/hlds_run; 
       fi && 
       if [ -f /home/steam/hlds/hlds_run ] || [ -f /home/steam/hlds/hlds_linux ]; then 
-        chmod -R 755 /home/steam/hlds && 
+        chmod +x /home/steam/hlds/hlds_* && 
         ${formattedCmd}; 
       else 
-        echo "HLDS installation failed: hlds_run/hlds_linux missing"; 
-        sleep 30; 
+        echo "HLDS installation failed: binary hlds_run/hlds_linux not found."; 
+        sleep 60; 
       fi
     `.replace(/\s+/g, ' ').trim();
 
     const container = await docker.createContainer({
       Image: imageName,
       name: containerName,
-      User: 'root',
+      User: 'steam', // Run as standard steam user (UID 1000)
       Tty: true,
       Cmd: ['bash', '-c', initScript],
       ExposedPorts: {
