@@ -57,10 +57,9 @@ fastify.post('/api/servers/delete', async (request, reply) => {
   }
 });
 
-// Wildcard parameter fixes routing for IDs containing dots (e.g. cs.ichim.net)
-fastify.post('/api/servers/*\/control', async (request, reply) => {
-  const fullPath = request.params['*'];
-  const id = fullPath.replace(/\/control$/, '');
+// Clean parametric routes for control and rcon actions
+fastify.post('/api/servers/:id/control', async (request, reply) => {
+  const { id } = request.params;
   const { action } = request.body;
 
   const success = await controlContainer(id, action);
@@ -71,9 +70,8 @@ fastify.post('/api/servers/*\/control', async (request, reply) => {
   reply.status(500).send({ error: `Failed to ${action} server` });
 });
 
-fastify.post('/api/servers/*\/rcon', async (request, reply) => {
-  const fullPath = request.params['*'];
-  const id = fullPath.replace(/\/rcon$/, '');
+fastify.post('/api/servers/:id/rcon', async (request, reply) => {
+  const { id } = request.params;
   const { command } = request.body;
 
   try {
