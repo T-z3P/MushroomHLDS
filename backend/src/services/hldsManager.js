@@ -35,13 +35,8 @@ export async function getServersWithLiveStatus() {
       const inspect = await container.inspect();
 
       if (inspect.State.Running) {
-        if (server.status === 'installing') {
-          continue;
-        }
-
-        server.status = 'online';
-
         try {
+          // Attempt live A2S query
           const state = await GameDig.query({
             type: 'cs16',
             host: '127.0.0.1',
@@ -51,6 +46,7 @@ export async function getServersWithLiveStatus() {
           server.map = state.map || server.map;
           server.players = state.players ? state.players.length : server.players;
           server.max_players = state.maxplayers || server.max_players;
+          server.status = 'online';
 
           db.prepare('UPDATE servers SET status = ?, map = ?, players = ?, max_players = ? WHERE id = ?').run(
             'online',
@@ -60,7 +56,12 @@ export async function getServersWithLiveStatus() {
             server.id
           );
         } catch (queryErr) {
-          db.prepare("UPDATE servers SET status = 'online' WHERE id = ?").run(server.id);
+          // If query fails but container is running and not downloading for the first time, mark online
+          if (server.status !== 'installing') {
+            server.status = 'online';
+            db.prepare("UPDATE servers SET status = 'online' WHERE id = ?").run(server.id);
+          }
+          // If server.status IS 'installing', retain 'installing' until GameDig succeeds
         }
       } else {
         server.status = 'offline';
