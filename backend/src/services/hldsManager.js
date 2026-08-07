@@ -133,37 +133,26 @@ export async function createServerInstance(params) {
     await oldContainer.remove({ force: true });
   } catch (e) {}
 
-  // Script ensuring write access, SteamCMD execution, and boot
+  // 1. Fix folder permissions as root inside container
+  // 2. Run SteamCMD under 'steam' user
+  // 3. Fallback wrapper to hlds_linux if needed and start server
   const initScript = actionType === 'link' ? `
     mkdir -p /home/steam/hlds && 
-    cd /home/steam/hlds && 
-    if [ ! -f /home/steam/hlds/hlds_run ] && [ -f /home/steam/hlds/hlds_linux ]; then 
-      echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux "$@"' > /home/steam/hlds/hlds_run && 
-      chmod +x /home/steam/hlds/hlds_run; 
-    fi && 
-    if ls /home/steam/hlds/hlds_* 1> /dev/null 2>&1; then chmod +x /home/steam/hlds/hlds_*; fi && 
-    ${formattedCmd}
+    chown -R steam:steam /home/steam/hlds && 
+    chmod -R 775 /home/steam/hlds && 
+    su - steam -c "cd /home/steam/hlds && if [ ! -f hlds_run ] && [ -f hlds_linux ]; then echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux \"$@\"' > hlds_run && chmod +x hlds_run; fi && if ls hlds_* 1> /dev/null 2>&1; then chmod +x hlds_*; fi && ${formattedCmd}"
   `.replace(/\s+/g, ' ').trim() : `
     mkdir -p /home/steam/hlds && 
-    cd /home/steam/hlds && 
-    /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +quit && 
-    if [ ! -f /home/steam/hlds/hlds_run ] && [ -f /home/steam/hlds/hlds_linux ]; then 
-      echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux "$@"' > /home/steam/hlds/hlds_run && 
-      chmod +x /home/steam/hlds/hlds_run; 
-    fi && 
-    if ls /home/steam/hlds/hlds_* 1> /dev/null 2>&1; then chmod +x /home/steam/hlds/hlds_*; fi && 
-    if [ -f /home/steam/hlds/hlds_run ] || [ -f /home/steam/hlds/hlds_linux ]; then 
-      ${formattedCmd}; 
-    else 
-      echo "HLDS installation notice: binaries missing, holding container active."; 
-      sleep 60; 
-    fi
+    chown -R steam:steam /home/steam/hlds && 
+    chmod -R 775 /home/steam/hlds && 
+    su - steam -c "/home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +quit" && 
+    su - steam -c "cd /home/steam/hlds && if [ ! -f hlds_run ] && [ -f hlds_linux ]; then echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux \"$@\"' > hlds_run && chmod +x hlds_run; fi && if ls hlds_* 1> /dev/null 2>&1; then chmod +x hlds_*; fi && if [ -f hlds_run ] || [ -f hlds_linux ]; then ${formattedCmd}; else echo \"HLDS installation notice: binaries missing, holding container active.\"; sleep 60; fi"
   `.replace(/\s+/g, ' ').trim();
 
   const container = await docker.createContainer({
     Image: imageName,
     name: containerName,
-    User: 'steam',
+    User: 'root', // Entry as root to fix mount ownership
     Tty: true,
     Cmd: ['bash', '-c', initScript],
     ExposedPorts: {
