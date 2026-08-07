@@ -133,26 +133,23 @@ export async function createServerInstance(params) {
     await oldContainer.remove({ force: true });
   } catch (e) {}
 
-  // 1. Fix folder permissions as root inside container
-  // 2. Run SteamCMD under 'steam' user
-  // 3. Fallback wrapper to hlds_linux if needed and start server
   const initScript = actionType === 'link' ? `
-    mkdir -p /home/steam/hlds && 
-    chown -R steam:steam /home/steam/hlds && 
-    chmod -R 775 /home/steam/hlds && 
-    su - steam -c "cd /home/steam/hlds && if [ ! -f hlds_run ] && [ -f hlds_linux ]; then echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux \"$@\"' > hlds_run && chmod +x hlds_run; fi && if ls hlds_* 1> /dev/null 2>&1; then chmod +x hlds_*; fi && ${formattedCmd}"
-  `.replace(/\s+/g, ' ').trim() : `
-    mkdir -p /home/steam/hlds && 
-    chown -R steam:steam /home/steam/hlds && 
-    chmod -R 775 /home/steam/hlds && 
-    su - steam -c "/home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +quit" && 
-    su - steam -c "cd /home/steam/hlds && if [ ! -f hlds_run ] && [ -f hlds_linux ]; then echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux \"$@\"' > hlds_run && chmod +x hlds_run; fi && if ls hlds_* 1> /dev/null 2>&1; then chmod +x hlds_*; fi && if [ -f hlds_run ] || [ -f hlds_linux ]; then ${formattedCmd}; else echo \"HLDS installation notice: binaries missing, holding container active.\"; sleep 60; fi"
-  `.replace(/\s+/g, ' ').trim();
+mkdir -p /home/steam/hlds
+chown -R steam:steam /home/steam/hlds
+chmod -R 775 /home/steam/hlds
+su - steam -c "cd /home/steam/hlds && if [ ! -f hlds_run ] && [ -f hlds_linux ]; then echo '#!/bin/bash\nexport LD_LIBRARY_PATH=.:\$LD_LIBRARY_PATH\n./hlds_linux \"\$@\"' > hlds_run && chmod +x hlds_run; fi && if ls hlds_* 1>/dev/null 2>&1; then chmod +x hlds_*; fi && ${formattedCmd}"
+`.trim() : `
+mkdir -p /home/steam/hlds
+chown -R steam:steam /home/steam/hlds
+chmod -R 775 /home/steam/hlds
+su - steam -c "/home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +quit"
+su - steam -c "cd /home/steam/hlds && if [ ! -f hlds_run ] && [ -f hlds_linux ]; then echo '#!/bin/bash\nexport LD_LIBRARY_PATH=.:\$LD_LIBRARY_PATH\n./hlds_linux \"\$@\"' > hlds_run && chmod +x hlds_run; fi && if ls hlds_* 1>/dev/null 2>&1; then chmod +x hlds_*; fi && ${formattedCmd}"
+`.trim();
 
   const container = await docker.createContainer({
     Image: imageName,
     name: containerName,
-    User: 'root', // Entry as root to fix mount ownership
+    User: 'root',
     Tty: true,
     Cmd: ['bash', '-c', initScript],
     ExposedPorts: {
@@ -193,7 +190,6 @@ export async function deleteServerInstance(id, deleteFiles = false) {
   const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(id);
   if (!server) return { success: false, error: 'Server entry not found' };
 
-  // 1. Remove Docker Container
   const containerName = server.container_id || `mushroom-hlds_${id}`;
   try {
     const container = docker.getContainer(containerName);
@@ -203,7 +199,6 @@ export async function deleteServerInstance(id, deleteFiles = false) {
     console.error(`Container cleanup error for ${id}:`, err);
   }
 
-  // 2. Delete Files from OS level via /hlds_data mount mapping
   if (deleteFiles && server.installed_path) {
     try {
       const folderName = path.basename(server.installed_path);
@@ -219,7 +214,6 @@ export async function deleteServerInstance(id, deleteFiles = false) {
     }
   }
 
-  // 3. Purge DB record
   db.prepare('DELETE FROM servers WHERE id = ?').run(id);
 
   return { success: true };
