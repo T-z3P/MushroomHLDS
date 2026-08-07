@@ -35,6 +35,11 @@ export async function getServersWithLiveStatus() {
       const inspect = await container.inspect();
 
       if (inspect.State.Running) {
+        // Keep status as 'installing' if SQLite says it is still installing
+        if (server.status === 'installing') {
+          continue;
+        }
+
         server.status = 'online';
 
         try {
@@ -111,6 +116,7 @@ export async function createServerInstance(params) {
       port=excluded.port,
       query_port=excluded.query_port,
       rcon_password=excluded.rcon_password,
+      status=excluded.status,
       game=excluded.game,
       map=excluded.map,
       max_players=excluded.max_players,
@@ -128,7 +134,7 @@ export async function createServerInstance(params) {
     await oldContainer.remove({ force: true });
   } catch (e) {}
 
-  // Double-pass SteamCMD update + safe wildcard execution checks
+  // Multi-pass SteamCMD install string ensuring executable binary creation
   const initScript = actionType === 'link' ? `
     mkdir -p /home/steam/hlds && 
     cd /home/steam/hlds && 

@@ -58,7 +58,8 @@
           ⚙ Edit
         </button>
         <button 
-          :disabled="server.status === 'installing'"
+          @click="$emit('rcon', server)"
+          :disabled="server.status !== 'online'"
           class="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 font-medium rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           RCON Console
@@ -76,11 +77,11 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['refresh', 'edit']);
+const emit = defineEmits(['refresh', 'edit', 'rcon']);
 
 async function handleControl(action) {
   try {
-    const res = await fetch(`/api/servers/${props.server.id}/control`, {
+    const res = await fetch(`/api/servers/${encodeURIComponent(props.server.id)}/control`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action })
