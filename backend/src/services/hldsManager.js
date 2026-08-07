@@ -35,7 +35,6 @@ export async function getServersWithLiveStatus() {
       const inspect = await container.inspect();
 
       if (inspect.State.Running) {
-        // Keep status as 'installing' if SQLite says it is still installing
         if (server.status === 'installing') {
           continue;
         }
@@ -134,7 +133,7 @@ export async function createServerInstance(params) {
     await oldContainer.remove({ force: true });
   } catch (e) {}
 
-  // Multi-pass SteamCMD install string ensuring executable binary creation
+  // Script ensuring write access, SteamCMD execution, and boot
   const initScript = actionType === 'link' ? `
     mkdir -p /home/steam/hlds && 
     cd /home/steam/hlds && 
@@ -147,7 +146,7 @@ export async function createServerInstance(params) {
   `.replace(/\s+/g, ' ').trim() : `
     mkdir -p /home/steam/hlds && 
     cd /home/steam/hlds && 
-    /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +app_update 90 -beta steam_legacy validate +quit && 
+    /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +quit && 
     if [ ! -f /home/steam/hlds/hlds_run ] && [ -f /home/steam/hlds/hlds_linux ]; then 
       echo '#!/bin/bash\\nexport LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH\\n./hlds_linux "$@"' > /home/steam/hlds/hlds_run && 
       chmod +x /home/steam/hlds/hlds_run; 
