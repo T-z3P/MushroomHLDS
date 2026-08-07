@@ -200,6 +200,23 @@
             <textarea v-model="editForm.start_cmd" rows="2" class="w-full font-mono text-xs bg-[#0b0e17] border border-slate-800 rounded-xl px-4 py-2 text-indigo-300 focus:outline-none focus:border-indigo-500"></textarea>
           </div>
 
+          <!-- Delete Action Confirmation Box -->
+          <div class="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-3">
+            <span class="block text-xs font-bold text-rose-400 uppercase tracking-wider">Danger Zone</span>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input v-model="deleteFilesOption" type="checkbox" class="rounded bg-slate-900 border-slate-700 text-rose-600 focus:ring-0" />
+              <span>Also delete server files from OS host directory ({{ editForm.installed_path }})</span>
+            </label>
+            <button 
+              type="button" 
+              @click="submitDelete"
+              :disabled="isSubmitting"
+              class="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg text-xs transition-colors"
+            >
+              Delete Server Instance & Container
+            </button>
+          </div>
+
           <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-800">
             <button type="button" @click="showEditModal = false" class="px-4 py-2 text-slate-400 hover:text-white font-medium">Cancel</button>
             <button type="submit" :disabled="isSubmitting" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 disabled:opacity-50">
@@ -224,6 +241,7 @@ const logs = ref([]);
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const isSubmitting = ref(false);
+const deleteFilesOption = ref(false);
 const errorMessage = ref('');
 
 const form = ref({
@@ -255,6 +273,7 @@ function openAddModal() {
 
 function openEditModal(server) {
   editForm.value = { ...server };
+  deleteFilesOption.value = false;
   showEditModal.value = true;
 }
 
@@ -314,6 +333,35 @@ async function submitEdit() {
     }
   } catch (err) {
     console.error('Failed to update server instance', err);
+  } finally {
+    isSubmitting.value = false;
+  }
+}
+
+async function submitDelete() {
+  const confirmText = deleteFilesOption.value 
+    ? `Are you sure you want to PERMANENTLY DELETE server "${editForm.value.name}", its Docker container, AND its host files from ${editForm.value.installed_path}?` 
+    : `Are you sure you want to remove server "${editForm.value.name}" and its Docker container? (Host files will be kept)`;
+
+  if (!confirm(confirmText)) return;
+
+  isSubmitting.value = true;
+  try {
+    const res = await fetch('/api/servers/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: editForm.value.id,
+        deleteFiles: deleteFilesOption.value
+      })
+    });
+
+    if (res.ok) {
+      showEditModal.value = false;
+      await fetchData();
+    }
+  } catch (err) {
+    console.error('Failed to delete server instance', err);
   } finally {
     isSubmitting.value = false;
   }
