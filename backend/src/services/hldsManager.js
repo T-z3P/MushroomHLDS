@@ -32,18 +32,17 @@ export async function createServerInstance(params) {
     slots = 32,
     pingboost = 2,
     startCmd = '',
-    actionType = 'create', // 'link' or 'create'
+    actionType = 'create',
     customPath = '',
     execPath = ''
   } = params;
 
   const imageName = 'cm2network/steamcmd:latest';
   const containerName = `mushroom-hlds_${id}`;
-  const hostMountPath = customPath || `/srv/hlds/servers/${id}`;
+  const hostMountPath = customPath || `/srv/hlds/${id}`;
   const isFresh = actionType === 'create';
   const initialStatus = isFresh ? 'installing' : 'offline';
 
-  // Construct default command if not specified
   const formattedCmd = startCmd || `./hlds_run -game ${game} +ip 0.0.0.0 +port ${port} +maxplayers ${slots} +map ${map} -pingboost ${pingboost} +rcon_password ${rconPassword}`;
 
   db.prepare(`
@@ -71,9 +70,12 @@ export async function createServerInstance(params) {
       await oldContainer.remove({ force: true });
     } catch (e) {}
 
-    // Fixed SteamCMD app 90 installation loop by bypassing anonymous App 70 restrictions
+    // 1. Grant permissions to /home/steam/hlds inside container
+    // 2. Run steamcmd to install App 90 with -beta steam_legacy
+    // 3. Fallback to hlds_linux wrapper if hlds_run is missing
     const initScript = `
       mkdir -p /home/steam/hlds && 
+      chmod -R 777 /home/steam/hlds && 
       cd /home/steam/hlds && 
       /home/steam/steamcmd/steamcmd.sh +force_install_dir /home/steam/hlds +login anonymous +app_set_config 90 mod ${game} +app_update 90 -beta steam_legacy validate +quit && 
       if [ ! -f /home/steam/hlds/hlds_run ] && [ -f /home/steam/hlds/hlds_linux ]; then 
@@ -84,7 +86,7 @@ export async function createServerInstance(params) {
         chmod -R 755 /home/steam/hlds && 
         ${formattedCmd}; 
       else 
-        echo "HLDS installation notice: binary hlds_run pending or linked manually."; 
+        echo "HLDS installation failed: hlds_run/hlds_linux missing"; 
         sleep 30; 
       fi
     `.replace(/\s+/g, ' ').trim();
